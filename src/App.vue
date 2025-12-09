@@ -5,7 +5,17 @@
         <img src="./logo.png" alt="SportsZone logo" class="logo" />
         <h1>SportsZone</h1>
       </div>
+
+      <!-- LOGIN / LOGOUT UI -->
+      <div v-if="!user">
+        <button @click="login" class="login-btn">Login with Google</button>
+      </div>
+      <div v-else class="user-info">
+        <span class="welcome-text">Welcome, {{ user.displayName }}</span>
+        <button @click="logout" class="logout-btn">Logout</button>
+      </div>
     </header>
+
     <main>
       <div 
         class="player-card"
@@ -24,6 +34,7 @@
         <p class="bio" @click="openModal(player)" style="cursor: pointer;">{{ player.bio }}</p>
       </div>
     </main>
+
     <footer><p>© 2025 SportsZone. All rights reserved.</p></footer>
 
     <div v-if="selectedPlayer" class="modal" @click="selectedPlayer = null">
@@ -49,6 +60,9 @@
 </template>
 
 <script>
+import { auth, provider, db, doc, setDoc, getDoc } from './firebase';
+import { signInWithPopup } from 'firebase/auth';
+
 import allen from './allen.png'
 import bam from './bam.png'
 import brunson from './brunson.png'
@@ -63,6 +77,7 @@ export default {
     return {
       selectedPlayer: null,
       userFavorites: [],
+      user: null,
       players: [
         {
           name: "Grayson Allen",
@@ -148,18 +163,57 @@ export default {
     };
   },
   methods: {
-    openModal(player) {
-      this.selectedPlayer = player;
+    async login() {
+      try {
+        const result = await signInWithPopup(auth, provider);
+        this.user = result.user;
+
+        const docRef = doc(db, "favorites", this.user.uid);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          this.userFavorites = docSnap.data().playerNames;
+        } else {
+          this.userFavorites = [];
+        }
+      } catch (error) {
+        console.error("Login failed:", error);
+      }
     },
-    isFavorited(playerName) {
-      return this.userFavorites.includes(playerName);
+
+    async logout() {
+      try {
+        await auth.signOut();
+        this.user = null;
+        this.userFavorites = [];
+      } catch (err) {
+        console.error("Logout failed:", err);
+      }
     },
-    toggleFavorite(playerName) {
-      if (this.isFavorited(playerName)) {
+
+    async toggleFavorite(playerName) {
+      if (!this.user) {
+        alert("Please log in first!");
+        return;
+      }
+
+      if (this.userFavorites.includes(playerName)) {
         this.userFavorites = this.userFavorites.filter(name => name !== playerName);
       } else {
         this.userFavorites.push(playerName);
       }
+
+      await setDoc(doc(db, "favorites", this.user.uid), {
+        playerNames: this.userFavorites
+      });
+    },
+
+    isFavorited(playerName) {
+      return this.userFavorites.includes(playerName);
+    },
+
+    openModal(player) {
+      this.selectedPlayer = player;
     }
   }
 };
@@ -187,6 +241,26 @@ header {
   gap: 15px;
 }
 
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.logout-btn {
+  background-color: white;
+  color: rgb(220, 70, 70);
+  border: 2px solid rgb(220, 70, 70);
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.logout-btn:hover {
+  background-color: rgb(255, 230, 230);
+}
+
 .logo {
   height: 50px;
   object-fit: contain;
@@ -194,6 +268,25 @@ header {
 
 header h1 {
   margin: 0px;
+}
+
+login-btn {
+  background-color: white;
+  color: rgb(100, 150, 220);
+  border: none;
+  padding: 10px 15px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.login-btn:hover {
+  background-color: rgb(240, 240, 240);
+}
+
+.welcome-text {
+  font-weight: bold;
+  font-size: 16px;
 }
 
 main {
